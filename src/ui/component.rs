@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     math::{Point, PointExt, Raw, Rect, Scaled, Size, SizeExt, Surround},
     shape::{Fill, Shape},
@@ -370,9 +372,19 @@ pub trait InteractiveComponent: Component {
         context.insert_new_entity(context.index(), component).await
     }
 
-    async fn callback(&self, context: &mut Context, message: Self::Event) {
+    async fn callback(&self, context: &mut Context, message: Self::Event) -> bool {
         if let Some(node) = context.arena().get(&context.index()).await {
-            node.callback(message).await;
+            node.callback(message).await
+        } else {
+            false
+        }
+    }
+
+    async fn has_callback(&self, context: &mut Context) -> bool {
+        if let Some(node) = context.arena().get(&context.index()).await {
+            node.has_callback().await
+        } else {
+            false
         }
     }
 }
@@ -413,8 +425,9 @@ impl<Input: Send + 'static, Output: Send + Sync + 'static> TypeErasedCallback<In
     }
 }
 
+#[derive(Clone)]
 pub struct Callback<Input> {
-    wrapped: Box<dyn TypeErasedCallback<Input>>,
+    wrapped: Arc<Box<dyn TypeErasedCallback<Input>>>,
 }
 
 impl<Input> Callback<Input>
@@ -426,10 +439,10 @@ where
         callback: F,
     ) -> Self {
         Self {
-            wrapped: Box::new(FullyTypedCallback {
+            wrapped: Arc::new(Box::new(FullyTypedCallback {
                 translator: Box::new(callback),
                 target,
-            }),
+            })),
         }
     }
 
