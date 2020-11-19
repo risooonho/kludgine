@@ -22,7 +22,6 @@ mod image;
 mod label;
 #[cfg(feature = "ecs")]
 pub mod legion;
-mod list;
 mod pane;
 mod panel;
 mod pending;
