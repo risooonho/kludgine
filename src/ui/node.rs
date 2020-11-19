@@ -129,8 +129,7 @@ impl dyn AnyNode {
 
 #[async_trait]
 pub(crate) trait CallbackSender {
-    async fn send_callback(&self, input: Box<dyn Any + Send + Sync>) -> bool;
-    async fn has_callback(&self) -> bool;
+    async fn send_callback(&self, input: Box<dyn Any + Send + Sync>);
 }
 
 #[async_trait]
@@ -365,21 +364,11 @@ impl<T: InteractiveComponent + 'static> AnyNode for NodeData<T> {
 
 #[async_trait]
 impl<T: InteractiveComponent + 'static> CallbackSender for NodeData<T> {
-    async fn send_callback(&self, output: Box<dyn Any + Send + Sync>) -> bool {
+    async fn send_callback(&self, output: Box<dyn Any + Send + Sync>) {
         let output = output.downcast_ref::<T::Event>().unwrap().clone();
-        if let Some(callback) = self.callback.clone() {
-            Runtime::spawn(async move {
-                callback.invoke(output).await;
-            })
-            .detach();
-            true
-        } else {
-            false
+        if let Some(callback) = self.callback.as_ref() {
+            callback.invoke(output).await;
         }
-    }
-
-    async fn has_callback(&self) -> bool {
-        self.callback.is_some()
     }
 }
 
@@ -610,16 +599,13 @@ impl Node {
         component.unhovered(context).await
     }
 
-    pub async fn callback<Input: Send + Sync + 'static>(&self, message: Input) -> bool {
+    pub async fn callback<Input: Send + Sync + 'static>(&self, message: Input) {
         let component = self.component.clone();
-        let component = component.read().await;
-        component.send_callback(Box::new(message)).await
-    }
-
-    pub async fn has_callback(&self) -> bool {
-        let component = self.component.clone();
-        let component = component.read().await;
-        component.has_callback().await
+        Runtime::spawn(async move {
+            let component = component.read().await;
+            component.send_callback(Box::new(message)).await
+        })
+        .detach();
     }
 
     pub(crate) async fn set_layout(&self, layout: Layout) {
